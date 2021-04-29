@@ -23,6 +23,10 @@ and querying your GRPC services.
   <b>No extra</b> steps or configuration <b>needed</b>.
 </p>
 
+## Forked from the origin to support Any proto
+
+
+
 ## Features
 
 - Native GRPC calls
