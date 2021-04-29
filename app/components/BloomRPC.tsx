@@ -60,7 +60,7 @@ export function BloomRPC() {
             onReload={() => {
               hydrateEditor(setProtos, setEditorTabs);
             }}
-            onMethodSelected={handleMethodSelected(editorTabs, setTabs)}
+            onMethodSelected={() => {}}
             onDeleteAll={() => {
               setProtos([]);
             }}
@@ -232,39 +232,6 @@ function handleProtoUpload(setProtos: React.Dispatch<ProtoFile[]>, protos: Proto
     setProtos(appProtos);
 
     return appProtos;
-  }
-}
-
-/**
- * Handle method selected
- * @param editorTabs
- * @param setTabs
- */
-function handleMethodSelected(editorTabs: EditorTabs, setTabs: React.Dispatch<EditorTabs>) {
-  return (methodName: string, protoService: ProtoService) => {
-    const tab = {
-      tabKey: `${protoService.serviceName}${methodName}`,
-      methodName,
-      service: protoService
-    };
-
-    const tabExists = editorTabs.tabs
-      .find(exisingTab => exisingTab.tabKey === tab.tabKey);
-
-    if (tabExists) {
-      setTabs({
-        activeKey: tab.tabKey,
-        tabs: editorTabs.tabs,
-      });
-      return;
-    }
-
-    const newTabs = [...editorTabs.tabs, tab];
-
-    setTabs({
-      activeKey: tab.tabKey,
-      tabs: newTabs,
-    });
   }
 }
 

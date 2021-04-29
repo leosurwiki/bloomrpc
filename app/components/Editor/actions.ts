@@ -1,9 +1,10 @@
-import { Certificate, GRPCEventEmitter } from '../../behaviour';
+import { Certificate, GRPCEventEmitter } from "../../behaviour";
 import { EditorResponse } from "./Editor";
 
 const actions = {
   SET_URL: "SET_URL",
   SET_DATA: "SET_DATA",
+  SET_ACTIVE: "SET_ACTIVE",
   SET_IS_LOADING: "SET_IS_LOADING",
   SET_RESPONSE: "SET_RESPONSE",
   SET_CALL: "SET_CALL",
@@ -18,7 +19,12 @@ const actions = {
   SET_STREAM_COMMITTED: "SET_STREAM_COMMITTED",
   SET_SSL_CERTIFICATE: "SET_SSL_CERTIFICATE",
   SET_ENVIRONMENT: "SET_ENVIRONMENT",
+  FILL_ANY_PROTO: "FILL_ANY_PROTO"
 };
+
+export function setActive(value: boolean) {
+  return { type: actions.SET_ACTIVE, value };
+}
 
 export function setUrl(value: string) {
   return { type: actions.SET_URL, value };
@@ -26,6 +32,10 @@ export function setUrl(value: string) {
 
 export function setData(data: string) {
   return { type: actions.SET_DATA, data };
+}
+
+export function fillAnyProto(data: string) {
+  return { type: actions.FILL_ANY_PROTO, data };
 }
 
 export function setIsLoading(isLoading: boolean) {

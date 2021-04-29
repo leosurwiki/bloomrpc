@@ -1,73 +1,82 @@
-import * as React from 'react';
-import { useEffect, useReducer } from 'react';
+import * as React from "react";
+import { useCallback, useEffect, useReducer } from "react";
 import {
   actions,
-  setData, setEnvironment, setInteractive,
+  fillAnyProto, setActive,
+  setData,
+  setEnvironment,
+  setInteractive,
   setMetadata,
   setMetadataVisibilty,
   setProtoVisibility,
   setTSLCertificate,
-  setUrl,
-} from './actions';
-import { Response } from './Response';
-import { Metadata } from './Metadata';
-import { Controls, isControlVisible } from './Controls';
-import { Request } from './Request';
-import { Options } from './Options';
-import { ProtoFileViewer } from './ProtoFileViewer';
-import { Certificate, ProtoInfo, GRPCEventEmitter } from '../../behaviour';
-import { getMetadata, getUrl, storeUrl } from '../../storage';
+  setUrl
+} from "./actions";
+import { Response } from "./Response";
+import { Metadata } from "./Metadata";
+import { Controls, isControlVisible } from "./Controls";
+import { Request } from "./Request";
+import { Options } from "./Options";
+import { ProtoFileViewer } from "./ProtoFileViewer";
+import { Certificate, ProtoInfo, GRPCEventEmitter } from "../../behaviour";
+import { getMetadata, getUrl, storeUrl } from "../../storage";
 
-import 'brace/theme/textmate';
-import 'brace/mode/json';
-import 'brace/mode/protobuf';
+import "brace/theme/textmate";
+import "brace/mode/json";
+import "brace/mode/protobuf";
 import { exportResponseToJSONFile } from "../../behaviour/response";
 import Resizable from "re-resizable";
 import { AddressBar } from "./AddressBar";
-import { deleteEnvironment, getEnvironments, saveEnvironment } from "../../storage/environments";
+import {
+  deleteEnvironment,
+  getEnvironments,
+  saveEnvironment
+} from "../../storage/environments";
+import { SideBarStore } from "../Sidebar/SideBarStore";
 
 export interface EditorAction {
-  [key: string]: any
-  type: string
+  [key: string]: any;
+  type: string;
 }
 
 export interface EditorEnvironment {
-  name: string
-  url: string
-  metadata: string,
-  interactive: boolean
-  tlsCertificate: Certificate,
+  name: string;
+  url: string;
+  metadata: string;
+  interactive: boolean;
+  tlsCertificate: Certificate;
 }
 
 export interface EditorRequest {
-  url: string
-  data: string
-  inputs?: string // @deprecated
-  metadata: string
-  interactive: boolean
-  environment?: string
-  grpcWeb: boolean
-  tlsCertificate?: Certificate
+  url: string;
+  data: string;
+  inputs?: string; // @deprecated
+  metadata: string;
+  interactive: boolean;
+  environment?: string;
+  grpcWeb: boolean;
+  tlsCertificate?: Certificate;
 }
 
 export interface EditorState extends EditorRequest {
-  loading: boolean
-  response: EditorResponse
-  metadataOpened: boolean
-  protoViewVisible: boolean
-  requestStreamData: string[]
-  responseStreamData: EditorResponse[]
-  streamCommitted: boolean
-  call?: GRPCEventEmitter
+  loading: boolean;
+  active: boolean;
+  response: EditorResponse;
+  metadataOpened: boolean;
+  protoViewVisible: boolean;
+  requestStreamData: string[];
+  responseStreamData: EditorResponse[];
+  streamCommitted: boolean;
+  call?: GRPCEventEmitter;
 }
 
 export interface EditorProps {
-  protoInfo?: ProtoInfo
-  onRequestChange?: (editorRequest: EditorRequest & EditorState) => void
-  initialRequest?: EditorRequest
-  environmentList?: EditorEnvironment[]
-  onEnvironmentListChange?: (environmentList: EditorEnvironment[]) => void
-  active?: boolean
+  protoInfo?: ProtoInfo;
+  onRequestChange?: (editorRequest: EditorRequest & EditorState) => void;
+  initialRequest?: EditorRequest;
+  environmentList?: EditorEnvironment[];
+  onEnvironmentListChange?: (environmentList: EditorEnvironment[]) => void;
+  active?: boolean;
 }
 
 export interface EditorResponse {
@@ -77,6 +86,7 @@ export interface EditorResponse {
 
 const INITIAL_STATE: EditorState = {
   url: "0.0.0.0:3009",
+  active: false,
   data: "",
   metadata: "",
   requestStreamData: [],
@@ -86,13 +96,13 @@ const INITIAL_STATE: EditorState = {
   loading: false,
   response: {
     output: "",
-    responseTime: undefined,
+    responseTime: undefined
   },
   metadataOpened: false,
   protoViewVisible: false,
   streamCommitted: false,
   tlsCertificate: undefined,
-  call: undefined,
+  call: undefined
 };
 
 /**
@@ -102,7 +112,23 @@ const INITIAL_STATE: EditorState = {
  */
 const reducer = (state: EditorState, action: EditorAction) => {
   switch (action.type) {
+    case actions.FILL_ANY_PROTO:
+      if (
+        state.data.includes(
+          '"place_holder": "{{double click a message to fill}}"'
+        ) && state.active
+      ) {
+        const newData = state.data.replace(
+          '"place_holder": "{{double click a message to fill}}"',
+          action.data
+        );
 
+        return { ...state, data: JSON.stringify(JSON.parse(newData), null, 2) };
+      } else {
+        return state;
+      }
+    case actions.SET_ACTIVE:
+      return { ...state, active: action.value };
     case actions.SET_DATA:
       return { ...state, data: action.data };
 
@@ -140,7 +166,10 @@ const reducer = (state: EditorState, action: EditorAction) => {
       return { ...state, responseStreamData: action.responseData };
 
     case actions.ADD_RESPONSE_STREAM_DATA:
-      return { ...state, responseStreamData: [...state.responseStreamData, action.responseData] };
+      return {
+        ...state,
+        responseStreamData: [...state.responseStreamData, action.responseData]
+      };
 
     case actions.SET_STREAM_COMMITTED:
       return { ...state, streamCommitted: action.committed };
@@ -152,114 +181,153 @@ const reducer = (state: EditorState, action: EditorAction) => {
       return { ...state, environment: action.environment };
 
     default:
-      return state
+      return state;
   }
 };
 
-export function Editor({ protoInfo, initialRequest, onRequestChange, onEnvironmentListChange, environmentList, active }: EditorProps) {
-  const [state, dispatch] = useReducer(reducer, {
-    ...INITIAL_STATE,
-    url: (initialRequest && initialRequest.url) || getUrl() || INITIAL_STATE.url,
-    interactive: initialRequest ? initialRequest.interactive : (protoInfo && protoInfo.usesStream()) || INITIAL_STATE.interactive,
-    grpcWeb: initialRequest ? initialRequest.grpcWeb : INITIAL_STATE.grpcWeb,
-    metadata: (initialRequest && initialRequest.metadata) || getMetadata() || INITIAL_STATE.metadata,
-    environment: (initialRequest && initialRequest.environment),
-  }, undefined);
+export function Editor({
+  protoInfo,
+  initialRequest,
+  onRequestChange,
+  onEnvironmentListChange,
+  environmentList,
+  active
+}: EditorProps) {
+  const [state, dispatch] = useReducer(
+    reducer,
+    {
+      ...INITIAL_STATE,
+      url:
+        (initialRequest && initialRequest.url) || getUrl() || INITIAL_STATE.url,
+      interactive: initialRequest
+        ? initialRequest.interactive
+        : (protoInfo && protoInfo.usesStream()) || INITIAL_STATE.interactive,
+      grpcWeb: initialRequest ? initialRequest.grpcWeb : INITIAL_STATE.grpcWeb,
+      metadata:
+        (initialRequest && initialRequest.metadata) ||
+        getMetadata() ||
+        INITIAL_STATE.metadata,
+      environment: initialRequest && initialRequest.environment
+    },
+    undefined
+  );
 
+  const handleMessageClicked = useCallback(plain => {
+      dispatch(fillAnyProto(plain));
+  }, []);
+
+  useEffect(() => {
+    dispatch(setActive(!!active));
+  }, [active]);
+  
   useEffect(() => {
     if (protoInfo && !initialRequest) {
       try {
-        const { plain } = protoInfo.service.methodsMocks[protoInfo.methodName]();
+        const { plain } = protoInfo.service.methodsMocks[
+          protoInfo.methodName
+        ]();
         dispatch(setData(JSON.stringify(plain, null, 2)));
       } catch (e) {
         console.error(e);
-        dispatch(setData(JSON.stringify({
-          "error": "Error parsing the request message, please report the problem sharing the offending protofile"
-        }, null, 2)));
+        dispatch(
+          setData(
+            JSON.stringify(
+              {
+                error:
+                  "Error parsing the request message, please report the problem sharing the offending protofile"
+              },
+              null,
+              2
+            )
+          )
+        );
       }
     }
 
+    SideBarStore.addListenerToMessageClicked(handleMessageClicked);
     if (initialRequest) {
       dispatch(setData(initialRequest.inputs || initialRequest.data));
       dispatch(setMetadata(initialRequest.metadata));
       dispatch(setTSLCertificate(initialRequest.tlsCertificate));
     }
-  }, []);
+  }, [handleMessageClicked]);
 
   return (
     <div style={styles.tabContainer}>
       <div style={styles.inputContainer}>
         <div style={{ width: "60%" }}>
           <AddressBar
-              protoInfo={protoInfo}
-              loading={state.loading}
-              url={state.url}
-              defaultEnvironment={state.environment}
-              environments={environmentList}
-              onChangeEnvironment={(environment) => {
-
-                if (!environment) {
-                  dispatch(setEnvironment(""));
-                  onRequestChange && onRequestChange({
+            protoInfo={protoInfo}
+            loading={state.loading}
+            url={state.url}
+            defaultEnvironment={state.environment}
+            environments={environmentList}
+            onChangeEnvironment={environment => {
+              if (!environment) {
+                dispatch(setEnvironment(""));
+                onRequestChange &&
+                  onRequestChange({
                     ...state,
-                    environment: "",
+                    environment: ""
                   });
-                  return;
-                }
+                return;
+              }
 
-                dispatch(setUrl(environment.url));
-                dispatch(setMetadata(environment.metadata));
-                dispatch(setEnvironment(environment.name));
-                dispatch(setTSLCertificate(environment.tlsCertificate));
-                dispatch(setInteractive(environment.interactive));
+              dispatch(setUrl(environment.url));
+              dispatch(setMetadata(environment.metadata));
+              dispatch(setEnvironment(environment.name));
+              dispatch(setTSLCertificate(environment.tlsCertificate));
+              dispatch(setInteractive(environment.interactive));
 
-                onRequestChange && onRequestChange({
+              onRequestChange &&
+                onRequestChange({
                   ...state,
                   environment: environment.name,
                   url: environment.url,
                   metadata: environment.metadata,
                   tlsCertificate: environment.tlsCertificate,
-                  interactive: environment.interactive,
+                  interactive: environment.interactive
                 });
-              }}
-              onEnvironmentDelete={(environmentName) => {
-                deleteEnvironment(environmentName);
-                dispatch(setEnvironment(""));
-                onRequestChange && onRequestChange({
+            }}
+            onEnvironmentDelete={environmentName => {
+              deleteEnvironment(environmentName);
+              dispatch(setEnvironment(""));
+              onRequestChange &&
+                onRequestChange({
                   ...state,
-                  environment: "",
+                  environment: ""
                 });
-                onEnvironmentListChange && onEnvironmentListChange(
-                    getEnvironments()
-                );
-              }}
-              onEnvironmentSave={(environmentName) => {
-                saveEnvironment({
-                  name: environmentName,
-                  url: state.url,
-                  interactive: state.interactive,
-                  metadata: state.metadata,
-                  tlsCertificate: state.tlsCertificate,
+              onEnvironmentListChange &&
+                onEnvironmentListChange(getEnvironments());
+            }}
+            onEnvironmentSave={environmentName => {
+              saveEnvironment({
+                name: environmentName,
+                url: state.url,
+                interactive: state.interactive,
+                metadata: state.metadata,
+                tlsCertificate: state.tlsCertificate
+              });
+
+              dispatch(setEnvironment(environmentName));
+              onRequestChange &&
+                onRequestChange({
+                  ...state,
+                  environment: environmentName
                 });
 
-                dispatch(setEnvironment(environmentName));
-                onRequestChange && onRequestChange({
+              onEnvironmentListChange &&
+                onEnvironmentListChange(getEnvironments());
+            }}
+            onChangeUrl={e => {
+              dispatch(setUrl(e.target.value));
+              storeUrl(e.target.value);
+              onRequestChange &&
+                onRequestChange({
                   ...state,
-                  environment: environmentName,
+                  url: e.target.value
                 });
-
-                onEnvironmentListChange && onEnvironmentListChange(
-                    getEnvironments()
-                );
-              }}
-              onChangeUrl={(e) => {
-                dispatch(setUrl(e.target.value));
-                storeUrl(e.target.value);
-                onRequestChange && onRequestChange({
-                  ...state,
-                  url: e.target.value,
-                });
-              }}
+            }}
           />
         </div>
 
@@ -270,21 +338,23 @@ export function Editor({ protoInfo, initialRequest, onRequestChange, onEnvironme
             grpcWebChecked={state.grpcWeb}
             interactiveChecked={state.interactive}
             onClickExport={async () => {
-              await exportResponseToJSONFile(protoInfo, state)
+              await exportResponseToJSONFile(protoInfo, state);
             }}
-            onInteractiveChange={(checked) => {
-              onRequestChange && onRequestChange({
-                ...state,
-                interactive: checked,
-              });
+            onInteractiveChange={checked => {
+              onRequestChange &&
+                onRequestChange({
+                  ...state,
+                  interactive: checked
+                });
             }}
             tlsSelected={state.tlsCertificate}
-            onTLSSelected={(certificate) => {
+            onTLSSelected={certificate => {
               dispatch(setTSLCertificate(certificate));
-              onRequestChange && onRequestChange({
-                ...state,
-                tlsCertificate: certificate,
-              });
+              onRequestChange &&
+                onRequestChange({
+                  ...state,
+                  tlsCertificate: certificate
+                });
             }}
           />
         )}
@@ -292,40 +362,43 @@ export function Editor({ protoInfo, initialRequest, onRequestChange, onEnvironme
 
       <div style={styles.editorContainer}>
         <Resizable
-            enable={{ right: true }}
-            defaultSize={{
-              width: "50%",
-            }}
-            maxWidth={"80%"}
-            minWidth={"10%"}
+          enable={{ right: true }}
+          defaultSize={{
+            width: "50%"
+          }}
+          maxWidth={"80%"}
+          minWidth={"10%"}
         >
           <Request
             data={state.data}
             streamData={state.requestStreamData}
             active={active}
-            onChangeData={(value) => {
+            onChangeData={value => {
               dispatch(setData(value));
-              onRequestChange && onRequestChange({
-                ...state,
-                data: value,
-              });
+              onRequestChange &&
+                onRequestChange({
+                  ...state,
+                  data: value
+                });
             }}
           />
 
-          <div style={{
-            ...styles.playIconContainer,
-            ...(isControlVisible(state) ? styles.streamControlsContainer : {}),
-          }}>
+          <div
+            style={{
+              ...styles.playIconContainer,
+              ...(isControlVisible(state) ? styles.streamControlsContainer : {})
+            }}
+          >
             <Controls
-                active={active}
-                dispatch={dispatch}
-                state={state}
-                protoInfo={protoInfo}
+              active={active}
+              dispatch={dispatch}
+              state={state}
+              protoInfo={protoInfo}
             />
           </div>
         </Resizable>
 
-        <div style={{...styles.responseContainer}}>
+        <div style={{ ...styles.responseContainer }}>
           <Response
             streamResponse={state.responseStreamData}
             response={state.response}
@@ -337,12 +410,13 @@ export function Editor({ protoInfo, initialRequest, onRequestChange, onEnvironme
         onClickMetadata={() => {
           dispatch(setMetadataVisibilty(!state.metadataOpened));
         }}
-        onMetadataChange={(value) => {
+        onMetadataChange={value => {
           dispatch(setMetadata(value));
-          onRequestChange && onRequestChange({
-            ...state,
-            metadata: value,
-          });
+          onRequestChange &&
+            onRequestChange({
+              ...state,
+              metadata: value
+            });
         }}
         value={state.metadata}
       />
@@ -355,14 +429,14 @@ export function Editor({ protoInfo, initialRequest, onRequestChange, onEnvironme
         />
       )}
     </div>
-  )
+  );
 }
 
 const styles = {
   tabContainer: {
     width: "100%",
     height: "100%",
-    position: "relative" as "relative",
+    position: "relative" as "relative"
   },
   editorContainer: {
     display: "flex",
@@ -385,10 +459,10 @@ const styles = {
     zIndex: 10,
     right: "-30px",
     marginLeft: "-25px",
-    top: "calc(50% - 80px)",
+    top: "calc(50% - 80px)"
   },
   streamControlsContainer: {
-    right: "-42px",
+    right: "-42px"
   },
   inputContainer: {
     display: "flex",
@@ -397,6 +471,6 @@ const styles = {
     borderBottom: "1px solid #eee",
     background: "#fafafa",
     padding: "15px",
-    boxShadow: "2px 0px 4px 0px rgba(0,0,0,0.20)",
-  },
+    boxShadow: "2px 0px 4px 0px rgba(0,0,0,0.20)"
+  }
 };

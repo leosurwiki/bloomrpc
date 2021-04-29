@@ -12,6 +12,20 @@ import {
 } from './actions';
 import { ControlsStateProps } from './Controls';
 import { GRPCEventType, GRPCRequest, ResponseMetaInformation, GRPCEventEmitter, GRPCWebRequest } from '../../behaviour';
+import {SideBarStore} from "../Sidebar/SideBarStore";
+
+function parseAnyProto(request: any) {
+  if (request["type_url"]) {
+    const messageType = SideBarStore.getMessageFromTypeUrl(request["type_url"]);
+    const message = messageType.create(request["content"]);
+    const uint8Array = messageType.encode(message).finish();
+    const b64encoded = Buffer.from(uint8Array).toString('base64');
+    request["value"] = b64encoded;
+    delete request["content"];
+  } else if (request instanceof Object) {
+    Object.values(request).forEach(value => parseAnyProto(value));
+  }
+}
 
 export const makeRequest = ({ dispatch, state, protoInfo }: ControlsStateProps) => {
   // Do nothing if not set
@@ -27,12 +41,13 @@ export const makeRequest = ({ dispatch, state, protoInfo }: ControlsStateProps) 
 
   // Play button action:
   dispatch(setIsLoading(true));
-
+  const data = JSON.parse(state.data);
+  parseAnyProto(data);
   let grpcRequest : GRPCEventEmitter
   if (state.grpcWeb){
     grpcRequest = new GRPCWebRequest({
       url: state.url,
-      inputs: state.data,
+      inputs: JSON.stringify(data),
       metadata: state.metadata,
       protoInfo,
       interactive: state.interactive,
@@ -41,14 +56,13 @@ export const makeRequest = ({ dispatch, state, protoInfo }: ControlsStateProps) 
   } else {
     grpcRequest = new GRPCRequest({
       url: state.url,
-      inputs: state.data,
+      inputs: JSON.stringify(data),
       metadata: state.metadata,
       protoInfo,
       interactive: state.interactive,
       tlsCertificate: state.tlsCertificate,
     });
   }
-
   dispatch(setCall(grpcRequest));
 
   // Streaming cleanup
