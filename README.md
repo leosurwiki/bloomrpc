@@ -24,7 +24,14 @@ and querying your GRPC services.
 </p>
 
 ## Forked from the origin to support Any proto
+BloomRPC is a GUI for gRPC manual testing. Not only does it provide an interactive way to make gRPC calls, it also automatically generates the gRPC request with mocked data when you select a rpc method.
 
+However, we cannot use it to test our event log libraries since the event envelope encloses an event as an ambiguous “any type”, which is not currently supported by BloomRPC. So we extended BloomRPC to support “any type”, and here is an example of how we manually test the monolith event log forwarder consumer.
+
+Double click a RPC to bootstrap a request with some random mocked data.
+![image](https://user-images.githubusercontent.com/5493592/116621423-fb36e780-a8f7-11eb-9e61-8c309a60f9ae.png)
+Double click a message to fill ambiguous “any” fields.
+![image](https://user-images.githubusercontent.com/5493592/116621445-02f68c00-a8f8-11eb-9fac-a8cb06bea9f0.png)
 
 
 ## Features
